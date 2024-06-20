@@ -1,0 +1,2 @@
+class {{ model_name }}({{ base_class }}):{% for property_name, property in properties.items() %}
+  {{ property_name }}: {{ property.type }}{% if property.required %} = ...{% elif 'default' in property %} = {{ property.default }}{% elif property.type == 'Optional' %} = None{% endif %}{% if property.title %}  # {{ property.title }}{% endif %}{% endfor %}

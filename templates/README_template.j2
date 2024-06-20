@@ -1,0 +1,75 @@
+# {{ project_name }}
+## Overview
+
+{{ project_name }} is a Python client library generated from the OpenAPI specification. It allows easy interaction with the API endpoints and includes Pydantic models for data validation and serialization.
+
+## Installation
+
+To install the library, use pip:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Usage
+
+### Initialize the Client
+
+```python
+from {{ client_module_name }} import {{project_name}}Client
+
+client = {{project_name}}Client(base_url="https://api.example.com")
+```
+
+### API Methods
+
+{% for method in methods %}
+#### {{ method.name }}
+
+`{{ method.http_method }} {{ method.endpoint }}`
+
+**Parameters:**{% if method.params %}{% for param in method.params %}
+- `{{ param }}`: {% if 'type' in param %}{{ param.type }}{% else %}Any{% endif %}{% if param.required %} (required){% else %} (optional){% endif %}{% endfor %}{% endif %}{% if method.query_params %}{% for param in method.query_params %}
+- `{{ param }}`: {% if 'type' in param %}{{param.type}}{% else %}Any{% endif %}{% if param.required %} (required){% else %} (optional){% endif %}{% endfor %}{% endif %}{% if method.request_body %}{% for param in method.request_body %}
+- `{{ param.title }}`: {{param.type}}{% endfor %}{% endif %}{% if method.params|length > 0 or method.query_params|length > 0 or method.request_body|length > 0 %}{% else %}
+_No parameters._{% endif %}
+
+**Example:**
+
+```python
+{% if method.params %}# Add your parameters here
+{% for param in method.params %}{{ param }} = None{% if not loop.last %},{% endif %}
+{% endfor %}{% endif %}{% if method.query_params %}# Add your query parameters here
+{% for param in method.query_params %}{{ param }} = None{% if not loop.last %},{% endif %}
+{% endfor %}{% endif %}{% if method.request_body %}# Add your request body here
+{% for param in method.request_body %}{{ param.title }} = {{param.type}}(...){% if not loop.last %},{% endif %}
+{% endfor %}{% endif %}
+response = client.{{ method.name }}({% if 'params' in method %}{{ method.params|join(', ') }}{% endif %}{% if 'request_body' in method %}{% for param in method.request_body %}{% if method.params|length > 0 %}, {% endif %}{{param.title}}{%endfor%}{%endif%})
+print(response)
+```
+{% endfor %}{% if models %}
+## Pydantic Models
+If possible, the library includes Pydantic models for data validation and serialization. The models are generated from the OpenAPI specification and can be used to validate data before sending it to the API.
+
+{% for model in models %}
+
+### {{ model.title }}
+
+```python
+from {{ model_module_name }} import {{ model.title }}
+
+data = {
+    # Add your data here
+}
+
+model = {{ model.title }}(**data)
+print(model)
+```
+
+**Fields:**
+{% for field in model.fields %}
+- `{{ field.name }}`: {{ field.type }}{% if field.required %} (required){% else %} (optional){% endif %}{% endfor %}
+{% endfor %}{% endif %}
+## License
+
+**[TODO]**
