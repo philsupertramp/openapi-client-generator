@@ -304,7 +304,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
         file.write(requirements_content)
     
     template = env.get_template('./templates/pyproject_template.j2')
-    requirements_content = template.render(project_name=app_name)
+    requirements_content = template.render(project_name=client_module_name)
     with open(os.path.join(output_dir, '../pyproject.toml'), 'w') as file:
         file.write(requirements_content)
 
