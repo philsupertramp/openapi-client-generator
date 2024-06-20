@@ -6,6 +6,8 @@ from jinja2 import Environment, FileSystemLoader
 from openapi_spec_validator import validate_spec
 
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 model_registry = {}
 enum_objects = {}
 
@@ -114,7 +116,7 @@ def generate_pydantic_model(schema, template_path):
         properties = new_properties
     parsed_properties, base_class = parse_properties(properties, required)
 
-    env = Environment(loader=FileSystemLoader('.'))
+    env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template(template_path)
     model_code = template.render(model_name=model_name, properties=parsed_properties, base_class=base_class)
     return model_code
@@ -154,7 +156,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
         models[name] = model_code
 
     # Write the model definitions into the template file
-    env = Environment(loader=FileSystemLoader('.'))
+    env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template('./templates/model_module_template.j2')
     model_module_code = template.render(models=models.values())
     # Write the rendered code to a file
@@ -286,7 +288,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
 
     client_module_name = client_module_name.replace('/', '.')
 
-    env = Environment(loader=FileSystemLoader('.'))
+    env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template('./templates/README_template.j2')
     readme_content = template.render(
         project_name=app_name,
