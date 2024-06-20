@@ -149,15 +149,15 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     # first build enums, then build models
     schemas = spec.get('components', {}).get('schemas', {})
     for name, schema in filter(lambda x: 'enum' in x[1], schemas.items()):
-        model_code = generate_pydantic_model(schema, './templates/model_template.j2')
+        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
         models[name] = model_code
     for name, schema in filter(lambda x: 'enum' not in x[1], schemas.items()):
-        model_code = generate_pydantic_model(schema, './templates/model_template.j2')
+        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
         models[name] = model_code
 
     # Write the model definitions into the template file
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
-    template = env.get_template('./templates/model_module_template.j2')
+    template = env.get_template('templates/model_module_template.j2')
     model_module_code = template.render(models=models.values())
     # Write the rendered code to a file
     if models:
@@ -278,7 +278,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
             methods.append(definition)
 
     # Load and render the template
-    template_path = './templates/client_template.j2'
+    template_path = 'templates/client_template.j2'
     output_file = 'client.py'
     app_name = spec.get('info', {}).get('title', 'OpenAPI Client').title().replace('Api', 'API').replace(' ', '')
     if client_module_name.startswith('./'):
@@ -289,7 +289,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     client_module_name = client_module_name.replace('/', '.')
 
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
-    template = env.get_template('./templates/README_template.j2')
+    template = env.get_template('templates/README_template.j2')
     readme_content = template.render(
         project_name=app_name,
         client_module_name=f'{client_module_name}.client',
@@ -300,12 +300,12 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     with open(os.path.join(output_dir, '../README.md'), 'w') as file:
         file.write(readme_content)
 
-    template = env.get_template('./templates/requirements_template.j2')
+    template = env.get_template('templates/requirements_template.j2')
     requirements_content = template.render()
     with open(os.path.join(output_dir, '../requirements.txt'), 'w') as file:
         file.write(requirements_content)
     
-    template = env.get_template('./templates/pyproject_template.j2')
+    template = env.get_template('templates/pyproject_template.j2')
     requirements_content = template.render(project_name=client_module_name)
     with open(os.path.join(output_dir, '../pyproject.toml'), 'w') as file:
         file.write(requirements_content)
@@ -322,7 +322,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     with open(os.path.join(output_dir, output_file), 'w') as file:
         file.write(client_code)
 
-    template = env.get_template('./templates/async_client_template.j2')
+    template = env.get_template('templates/async_client_template.j2')
     async_client_code = template.render(
         app_name=app_name,
         methods=methods,
