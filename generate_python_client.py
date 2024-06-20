@@ -133,7 +133,8 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
 
 
     # create directory if it doesn't exist
-    output_dir = os.path.join(og_output_dir, og_output_dir.split('/')[-1])
+    client_module_name = og_output_dir.split('/')[-1].replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
+    output_dir = os.path.join(og_output_dir, client_module_name)
     os.makedirs(output_dir, exist_ok=True)
 
     # create __init__.py file if it doesn't exist
@@ -278,7 +279,6 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     template_path = './templates/client_template.j2'
     output_file = 'client.py'
     app_name = spec.get('info', {}).get('title', 'OpenAPI Client').title().replace('Api', 'API').replace(' ', '')
-    client_module_name = og_output_dir.split('/')[-1]
     if client_module_name.startswith('./'):
         client_module_name = client_module_name[2:]
     if client_module_name.endswith('/'):
