@@ -316,10 +316,19 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
         client_module_name=client_module_name.replace('/', '.'),
         token_type=token_type,
     )
-
     # Write the rendered code to a file
     with open(os.path.join(output_dir, output_file), 'w') as file:
         file.write(client_code)
+
+    template = env.get_template('./templates/async_client_template.j2')
+    async_client_code = template.render(
+        app_name=app_name,
+        methods=methods,
+        client_module_name=client_module_name.replace('/', '.'),
+        token_type=token_type,
+    )
+    with open(os.path.join(output_dir, 'async_client.py'), 'w') as file:
+        file.write(async_client_code)
 
     if not models:
         print('\033[91mNo models found in the OpenAPI spec!\033[0m')  # ]] to silence IDE warnings

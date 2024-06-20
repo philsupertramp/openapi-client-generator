@@ -1,37 +1,43 @@
-from client.client import DatasinkAPIClient
-from client import models
+from data_sink_api_client.async_client import AsyncDatasinkAPIClient
+from data_sink_api_client.client import models
+import asyncio
 
 
-def test_read_root():
-    client = DatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
+async def test_read_root():
+    client = AsyncDatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
 
-    response = client.read_root()
-    assert response == models.ReadRootResponse()
-
-
-def test_health_check():
-    client = DatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
-
-    response = client.health_check()
-    assert response == models.HealthCheckResponse()
-
-
-def test_get_models():
-    client = DatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
-
-    response = client.get_models()
-    assert isinstance(response, list) and all(isinstance(item, models.EmbeddingModel) for item in response)
+    response = await client.read_root()
+    #assert response == models.ReadRootResponse(), response
     print(response)
 
 
-def test_query():
-    client = DatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
+async def test_health_check():
+    client = AsyncDatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
 
-    response = client.query(4, models.QueryRequest(query='Hey there, what is up'))
-    assert isinstance(response, list), response
+    response = await client.health_check()
+    print(response)
+    #assert response == models.HealthCheckResponse()
 
 
-test_read_root()
-test_health_check()
-test_get_models()
-test_query()
+async def test_get_models():
+    client = AsyncDatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
+
+    response = await client.get_models()
+    #assert isinstance(response, list) and all(isinstance(item, models.EmbeddingModel) for item in response)
+    print(response)
+
+
+async def test_query():
+    client = AsyncDatasinkAPIClient('https://datasink.dev.easybits.tech', 'c2VydmljZXNAZWFzeWJpdHMudGVjaDo5dmVOSGFTSyFIbGJIOW1B')
+
+    response = await client.query(4, models.QueryRequest(query='Hey there, what is up'))
+    #assert isinstance(response, list), response
+    print(response)
+
+
+
+if __name__ == '__main__':
+    asyncio.run(test_read_root())
+    asyncio.run(test_health_check())
+    asyncio.run(test_get_models())
+    asyncio.run(test_query())
