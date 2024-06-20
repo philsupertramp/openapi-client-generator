@@ -120,7 +120,7 @@ def generate_pydantic_model(schema, template_path):
     return model_code
 
 
-def generate_client(openapi_json_path, output_dir, token_type='Basic'):
+def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     with open(openapi_json_path, 'r') as file:
         spec = json.load(file)
 
@@ -133,7 +133,7 @@ def generate_client(openapi_json_path, output_dir, token_type='Basic'):
 
 
     # create directory if it doesn't exist
-    output_dir = os.path.join(output_dir, output_dir.split('/')[-1])
+    output_dir = os.path.join(og_output_dir, og_output_dir.split('/')[-1])
     os.makedirs(output_dir, exist_ok=True)
 
     # create __init__.py file if it doesn't exist
@@ -278,7 +278,7 @@ def generate_client(openapi_json_path, output_dir, token_type='Basic'):
     template_path = './templates/client_template.j2'
     output_file = 'client.py'
     app_name = spec.get('info', {}).get('title', 'OpenAPI Client').title().replace('Api', 'API').replace(' ', '')
-    client_module_name = '/'.join(output_dir.split('/')[:-1])
+    client_module_name = '/'.join(og_output_dir.split('/')[:-1])
     if client_module_name.startswith('./'):
         client_module_name = client_module_name[2:]
     if client_module_name.endswith('/'):
