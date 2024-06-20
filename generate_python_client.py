@@ -302,6 +302,11 @@ def generate_client(openapi_json_path, output_dir, token_type='Basic'):
     requirements_content = template.render()
     with open(os.path.join(output_dir, '../requirements.txt'), 'w') as file:
         file.write(requirements_content)
+    
+    template = env.get_template('./templates/pyproject_template.j2')
+    requirements_content = template.render(project_name=app_name)
+    with open(os.path.join(output_dir, '../pyproject.toml'), 'w') as file:
+        file.write(requirements_content)
 
 
     template = env.get_template(template_path)
