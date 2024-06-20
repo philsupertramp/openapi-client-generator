@@ -19,48 +19,50 @@ def slugify(text):
     return text.replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
 
 
+def handle_any_all_of(property):
+    for key in ['anyOf', 'allOf']:
+        if key in property:
+            types = [get_type(sub_prop) for sub_prop in property.get(key, [])]
+            if 'null' in types:
+                types.remove('null')
+                return f"Optional[{types[0]}]"
+            types = list(set(types))
+            if len(types) == 1:
+                return types[0]
+            return 'Union[' + ', '.join(types) + ']'
+    return None
+
+
 def get_type(property):
-    if 'anyOf' in property:
-        types = [get_type(sub_prop) for sub_prop in property['anyOf']]
-        if 'null' in types:
-            types.remove('null')
-            return f"Optional[{types[0]}]"
-        types = list(set(types))
-        if len(types) == 1:
-            return types[0]
-        return 'Union[' + ', '.join(types) + ']'
-    if 'allOf' in property:
-        types = [get_type(sub_prop) for sub_prop in property['allOf']]
-        if 'null' in types:
-            types.remove('null')
-            return f"Optional[{types[0]}]"
-        types = list(set(types))
-        if len(types) == 1:
-            return types[0]
-        return 'Union[' + ', '.join(types) + ']'
-    if property.get('type') == 'integer':
-        return 'int'
-    if property.get('type') == 'string':
-        if property.get('enum') is not None:
-            return 'Literal[' + ', '.join([f"'{value}'" for value in property['enum']]) + ']'
-        if property.get('format') == 'uuid':
-            return 'UUID'
-        return 'str'
-    if property.get('type') == 'boolean':
-        return 'bool'
-    if property.get('type') == 'object':
-        return 'dict'
-    if property.get('type') == 'enum':
-        return property.get('title', 'Any')
-    if property.get('type') == 'array':
-        return f"List[{get_type(property['items'])}]"
+    type_mapping = {
+        'integer': 'int',
+        'string': 'str',
+        'boolean': 'bool',
+        'object': 'dict',
+        'enum': property.get('title', 'Any'),
+        'array': f"List[{get_type(property.get('items', {}))}]"
+    }
+
+    any_all_of_result = handle_any_all_of(property)
+    if any_all_of_result is not None:
+        return any_all_of_result
+
+    prop_type = property.get('type')
+
+    if prop_type == 'string' and property.get('enum') is not None:
+        return 'Literal[' + ', '.join([f"'{value}'" for value in property.get('enum', [])]) + ']'
+    if prop_type == 'string' and property.get('format') == 'uuid':
+        return 'UUID'
+
     if '$ref' in property:
-        reference = property['$ref'][1:]
-        reference = reference.split('/')[-1]
+        reference = property.get('$ref')[1:].split('/')[-1]
         return f"'{reference}'"
+
     if 'type' not in property and 'title' in property:
-        return f"'{property['title']}'"
-    return 'Any'
+        return f"'{property.get('title')}'"
+
+    return type_mapping.get(prop_type, 'Any')
+
 
 def parse_properties(properties, required):
     parsed_properties = {}
