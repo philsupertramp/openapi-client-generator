@@ -278,8 +278,6 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
             methods.append(definition)
 
     # Load and render the template
-    template_path = 'templates/client_template.j2'
-    output_file = 'client.py'
     app_name = spec.get('info', {}).get('title', 'OpenAPI Client').title().replace('Api', 'API').replace(' ', '')
     if client_module_name.startswith('./'):
         client_module_name = client_module_name[2:]
@@ -310,6 +308,8 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     with open(os.path.join(output_dir, '../pyproject.toml'), 'w') as file:
         file.write(requirements_content)
 
+    template_path = 'templates/client_template.j2'
+    output_file = 'client.py'
 
     template = env.get_template(template_path)
     client_code = template.render(
