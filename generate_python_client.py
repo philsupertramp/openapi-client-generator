@@ -19,48 +19,50 @@ def slugify(text):
     return text.replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
 
 
+def handle_any_all_of(property):
+    for key in ['anyOf', 'allOf']:
+        if key in property:
+            types = [get_type(sub_prop) for sub_prop in property.get(key, [])]
+            if 'null' in types:
+                types.remove('null')
+                return f"Optional[{types[0]}]"
+            types = list(set(types))
+            if len(types) == 1:
+                return types[0]
+            return 'Union[' + ', '.join(types) + ']'
+    return None
+
+
 def get_type(property):
-    if 'anyOf' in property:
-        types = [get_type(sub_prop) for sub_prop in property['anyOf']]
-        if 'null' in types:
-            types.remove('null')
-            return f"Optional[{types[0]}]"
-        types = list(set(types))
-        if len(types) == 1:
-            return types[0]
-        return 'Union[' + ', '.join(types) + ']'
-    if 'allOf' in property:
-        types = [get_type(sub_prop) for sub_prop in property['allOf']]
-        if 'null' in types:
-            types.remove('null')
-            return f"Optional[{types[0]}]"
-        types = list(set(types))
-        if len(types) == 1:
-            return types[0]
-        return 'Union[' + ', '.join(types) + ']'
-    if property.get('type') == 'integer':
-        return 'int'
-    if property.get('type') == 'string':
-        if property.get('enum') is not None:
-            return 'Literal[' + ', '.join([f"'{value}'" for value in property['enum']]) + ']'
-        if property.get('format') == 'uuid':
-            return 'UUID'
-        return 'str'
-    if property.get('type') == 'boolean':
-        return 'bool'
-    if property.get('type') == 'object':
-        return 'dict'
-    if property.get('type') == 'enum':
-        return property.get('title', 'Any')
-    if property.get('type') == 'array':
-        return f"List[{get_type(property['items'])}]"
+    type_mapping = {
+        'integer': 'int',
+        'string': 'str',
+        'boolean': 'bool',
+        'object': 'dict',
+        'enum': property.get('title', 'Any'),
+        'array': f"List[{get_type(property.get('items', {}))}]"
+    }
+
+    any_all_of_result = handle_any_all_of(property)
+    if any_all_of_result is not None:
+        return any_all_of_result
+
+    prop_type = property.get('type')
+
+    if prop_type == 'string' and property.get('enum') is not None:
+        return 'Literal[' + ', '.join([f"'{value}'" for value in property.get('enum', [])]) + ']'
+    if prop_type == 'string' and property.get('format') == 'uuid':
+        return 'UUID'
+
     if '$ref' in property:
-        reference = property['$ref'][1:]
-        reference = reference.split('/')[-1]
+        reference = property.get('$ref')[1:].split('/')[-1]
         return f"'{reference}'"
+
     if 'type' not in property and 'title' in property:
-        return f"'{property['title']}'"
-    return 'Any'
+        return f"'{property.get('title')}'"
+
+    return type_mapping.get(prop_type, 'Any')
+
 
 def parse_properties(properties, required):
     parsed_properties = {}
@@ -86,39 +88,45 @@ def parse_properties(properties, required):
         }
     return parsed_properties, base_class
 
+
+def parse_enum_schema(schema):
+    type_ = schema.get('type', 'str')
+    type_ = 'str' if type_ == 'string' else type_
+    properties = {'enums': schema['enum'], 'base_class': 'Enum', 'enum_type': type_}
+    enum_objects = {schema.get('title', 'MyModel'): [e.upper() if type_ == 'str' else e for e in schema['enum']]}
+    return properties, enum_objects
+
+def parse_ref_schema(prop, enum_objects):
+    for sub_prop in prop['allOf']:
+        reference = sub_prop.get('$ref', "")[1:].split('/')[-1]
+        if reference in enum_objects:
+            return {
+                'type': 'enum',
+                'title': reference,
+                'default': f'{reference}.{prop.get("default", "").upper()}'
+            }
+    return prop
+
+def parse_properties_schema(properties, enum_objects):
+    return {name: parse_ref_schema(prop, enum_objects) if 'allOf' in prop else prop for name, prop in properties.items()}
+
 def generate_pydantic_model(schema, template_path):
     model_name = schema.get('title', 'MyModel')
     properties = schema.get('properties', {})
     required = schema.get('required', [])
-    if not properties:
-        if 'enum' in schema:
-            type_ = schema.get('type', 'str')
-            if type_ == 'string':
-                type_ = 'str'
-            properties = {'enums': schema['enum'], 'base_class': 'Enum', 'enum_type': type_}
-            enum_objects[model_name] = [e.upper() if type_ == 'str' else e for e in schema['enum']]
+    
+    enum_objects = {}
+    if not properties and 'enum' in schema:
+        properties, enum_objects = parse_enum_schema(schema)
     else:
-        # find all enum fields
-        new_properties = {}
-        for name, prop in properties.items():
-            if 'allOf' in prop:
-                for sub_prop in prop['allOf']:
-                    if '$ref' in sub_prop:
-                        reference = sub_prop['$ref'][1:]
-                        reference = reference.split('/')[-1]
-                        if reference in enum_objects:
-                            prop = {
-                                'type': 'enum', 
-                                'title': reference,#prop.get('title', ''), 
-                                'default': f'{reference}.{prop.get("default", "").upper()}'
-                            }
-            new_properties[name] = prop
-        properties = new_properties
+        properties = parse_properties_schema(properties, enum_objects)
+    
     parsed_properties, base_class = parse_properties(properties, required)
 
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template(template_path)
     model_code = template.render(model_name=model_name, properties=parsed_properties, base_class=base_class)
+    
     return model_code
 
 
