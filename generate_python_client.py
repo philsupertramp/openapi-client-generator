@@ -88,39 +88,45 @@ def parse_properties(properties, required):
         }
     return parsed_properties, base_class
 
+
+def parse_enum_schema(schema):
+    type_ = schema.get('type', 'str')
+    type_ = 'str' if type_ == 'string' else type_
+    properties = {'enums': schema['enum'], 'base_class': 'Enum', 'enum_type': type_}
+    enum_objects = {schema.get('title', 'MyModel'): [e.upper() if type_ == 'str' else e for e in schema['enum']]}
+    return properties, enum_objects
+
+def parse_ref_schema(prop, enum_objects):
+    for sub_prop in prop['allOf']:
+        reference = sub_prop.get('$ref', "")[1:].split('/')[-1]
+        if reference in enum_objects:
+            return {
+                'type': 'enum',
+                'title': reference,
+                'default': f'{reference}.{prop.get("default", "").upper()}'
+            }
+    return prop
+
+def parse_properties_schema(properties, enum_objects):
+    return {name: parse_ref_schema(prop, enum_objects) if 'allOf' in prop else prop for name, prop in properties.items()}
+
 def generate_pydantic_model(schema, template_path):
     model_name = schema.get('title', 'MyModel')
     properties = schema.get('properties', {})
     required = schema.get('required', [])
-    if not properties:
-        if 'enum' in schema:
-            type_ = schema.get('type', 'str')
-            if type_ == 'string':
-                type_ = 'str'
-            properties = {'enums': schema['enum'], 'base_class': 'Enum', 'enum_type': type_}
-            enum_objects[model_name] = [e.upper() if type_ == 'str' else e for e in schema['enum']]
+    
+    enum_objects = {}
+    if not properties and 'enum' in schema:
+        properties, enum_objects = parse_enum_schema(schema)
     else:
-        # find all enum fields
-        new_properties = {}
-        for name, prop in properties.items():
-            if 'allOf' in prop:
-                for sub_prop in prop['allOf']:
-                    if '$ref' in sub_prop:
-                        reference = sub_prop['$ref'][1:]
-                        reference = reference.split('/')[-1]
-                        if reference in enum_objects:
-                            prop = {
-                                'type': 'enum', 
-                                'title': reference,#prop.get('title', ''), 
-                                'default': f'{reference}.{prop.get("default", "").upper()}'
-                            }
-            new_properties[name] = prop
-        properties = new_properties
+        properties = parse_properties_schema(properties, enum_objects)
+    
     parsed_properties, base_class = parse_properties(properties, required)
 
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template(template_path)
     model_code = template.render(model_name=model_name, properties=parsed_properties, base_class=base_class)
+    
     return model_code
 
 
