@@ -4,6 +4,8 @@ import re
 import argparse
 from jinja2 import Environment, FileSystemLoader
 from openapi_spec_validator import validate_spec
+from openapi_client_generator.string_utils import slugify, drop_quotes
+from openapi_client_generator.schema_utils import parse_properties, parse_enum_schema, parse_properties_schema, process_request_body
 
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,112 +14,16 @@ model_registry = {}
 enum_objects = {}
 
 
-def slugify(text):
-    # transform camelCase to snake_case
-    # find uppercase letters and add underscore before them
-    text = ''.join(['_' + char.lower() if char.isupper() else char for char in text]).lstrip('_')
-    return text.replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
-
-
-def handle_any_all_of(property):
-    for key in ['anyOf', 'allOf']:
-        if key in property:
-            types = [get_type(sub_prop) for sub_prop in property.get(key, [])]
-            if 'null' in types:
-                types.remove('null')
-                return f"Optional[{types[0]}]"
-            types = list(set(types))
-            if len(types) == 1:
-                return types[0]
-            return 'Union[' + ', '.join(types) + ']'
-    return None
-
-
-def get_type(property):
-    type_mapping = {
-        'integer': 'int',
-        'string': 'str',
-        'boolean': 'bool',
-        'object': 'dict',
-        'enum': property.get('title', 'Any'),
-        'array': f"List[{get_type(property.get('items', {}))}]"
-    }
-
-    any_all_of_result = handle_any_all_of(property)
-    if any_all_of_result is not None:
-        return any_all_of_result
-
-    prop_type = property.get('type')
-
-    if prop_type == 'string' and property.get('enum') is not None:
-        return 'Literal[' + ', '.join([f"'{value}'" for value in property.get('enum', [])]) + ']'
-    if prop_type == 'string' and property.get('format') == 'uuid':
-        return 'UUID'
-
-    if '$ref' in property:
-        reference = property.get('$ref')[1:].split('/')[-1]
-        return f"'{reference}'"
-
-    if 'type' not in property and 'title' in property:
-        return f"'{property.get('title')}'"
-
-    return type_mapping.get(prop_type, 'Any')
-
-
-def parse_properties(properties, required):
-    parsed_properties = {}
-    base_class = properties.pop('base_class', 'BaseModel')
-    if base_class == 'Enum':
-        enums = properties.pop('enums')
-        enum_type = properties.pop('enum_type', 'str')
-        parsed_properties = {enum.upper(): {'title': enum, 'default': f"'{enum}'", 'type': enum_type} for enum in enums}
-        return parsed_properties, base_class
-
-    for name, prop in properties.items():
-        type_ = get_type(prop)
-        default = prop.get('default', None)
-        if type_ == 'str' and prop.get('format') == 'date-time':
-            type_ = 'datetime'
-        if type_ == 'str':
-            default = f"'{default}'"
-        parsed_properties[name] = {
-            'type': type_,
-            'title': prop.get('title', ''),
-            'default': default,
-            'required': name in required,
-        }
-    return parsed_properties, base_class
-
-
-def parse_enum_schema(schema):
-    type_ = schema.get('type', 'str')
-    type_ = 'str' if type_ == 'string' else type_
-    properties = {'enums': schema['enum'], 'base_class': 'Enum', 'enum_type': type_}
-    enum_objects = {schema.get('title', 'MyModel'): [e.upper() if type_ == 'str' else e for e in schema['enum']]}
-    return properties, enum_objects
-
-def parse_ref_schema(prop, enum_objects):
-    for sub_prop in prop['allOf']:
-        reference = sub_prop.get('$ref', "")[1:].split('/')[-1]
-        if reference in enum_objects:
-            return {
-                'type': 'enum',
-                'title': reference,
-                'default': f'{reference}.{prop.get("default", "").upper()}'
-            }
-    return prop
-
-def parse_properties_schema(properties, enum_objects):
-    return {name: parse_ref_schema(prop, enum_objects) if 'allOf' in prop else prop for name, prop in properties.items()}
-
 def generate_pydantic_model(schema, template_path):
+    global enum_objects
     model_name = schema.get('title', 'MyModel')
     properties = schema.get('properties', {})
     required = schema.get('required', [])
     
-    enum_objects = {}
     if not properties and 'enum' in schema:
-        properties, enum_objects = parse_enum_schema(schema)
+        properties, enum_object = parse_enum_schema(schema)
+        key = list(enum_object.keys())[0]
+        enum_objects[key] = enum_object[key]
     else:
         properties = parse_properties_schema(properties, enum_objects)
     
@@ -130,48 +36,45 @@ def generate_pydantic_model(schema, template_path):
     return model_code
 
 
-def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
-    with open(openapi_json_path, 'r') as file:
-        spec = json.load(file)
-
-    # Validate the OpenAPI spec
-    try:
-        validate_spec(spec)
-    except Exception as e:
-        tb = e.__traceback__
-        print(f'\033[91mError validating OpenAPI spec:\n{str(tb)}\033[0m') # ]] to silence IDE warnings
-
-
-    # create directory if it doesn't exist
-    client_module_name = og_output_dir.split('/')[-1].replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
-    output_dir = os.path.join(og_output_dir, client_module_name)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # create __init__.py file if it doesn't exist
-    with open(os.path.join(output_dir, '__init__.py'), 'w') as file:
-        pass
-
-    # create models directory if it doesn't exist
-    # Generate Pydantic models
-    models = {}
-    # first build enums, then build models
-    schemas = spec.get('components', {}).get('schemas', {})
-    for name, schema in filter(lambda x: 'enum' in x[1], schemas.items()):
-        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
-        models[name] = model_code
-    for name, schema in filter(lambda x: 'enum' not in x[1], schemas.items()):
-        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
-        models[name] = model_code
-
-    # Write the model definitions into the template file
+def render_template(template_name, output_file, **kwargs):
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
-    template = env.get_template('templates/model_module_template.j2')
-    model_module_code = template.render(models=models.values())
-    # Write the rendered code to a file
-    if models:
-        with open(os.path.join(output_dir, 'models.py'), 'w') as file:
-            file.write(model_module_code)
+    template = env.get_template(template_name)
+    with open(output_file, 'w') as file:
+        file.write(template.render(**kwargs))
 
+
+def process_responses(responses):
+    return_types = []
+    return_ctors = []
+    for status_code, response in responses.items():
+        is_success = status_code.startswith('2')
+        if 'content' in response:
+            ref = response['content']['application/json']['schema']
+            if ref.get('type') == 'array':
+                refs = ref['items']
+                if '$ref' not in refs:
+                    return_types.append('List[dict]')
+                else:
+                    reference = refs['$ref'][1:].split('/')[-1]
+                    return_types.append(f'List[models.{reference}]')
+            else:
+                if '$ref' not in ref:
+                    return_types.append('dict')
+                else:
+                    reference = ref['$ref'][1:].split('/')[-1]
+                    return_types.append(f'models.{reference}')
+        if is_success and return_types:
+            last_return = return_types[-1]
+            if '[' in last_return or ']' in last_return:
+                return_ctor = re.findall(r'\[(.*?)\]', last_return)[0]
+            else:
+                return_ctor = last_return
+            return_ctors.append(return_ctor)
+
+    return list(set(return_types)), list(set(return_ctors))
+
+
+def parse_methods(spec):
     methods = []
     for path, path_item in spec.get('paths', {}).items():
         for http_method, operation in path_item.items():
@@ -197,71 +100,14 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
             request_body_params = []
             requires_body = http_method in ['post', 'put', 'patch']
             if requires_body:
-                # Add a breakpoint()
                 request_body = operation.get('requestBody', {}).get('content', {})
                 if request_body:
-                    for content_type, content in request_body.items():
-                        if content_type == 'application/json':
-                            schema = content['schema']
-                            if '$ref' in schema:
-                                # Add a breakpoint()
-                                reference = content['schema']['$ref'][1:]
-                                reference = reference.split('/')[-1]
-                                request_body_params.append({'type': f'models.{reference}', 'title': slugify(reference)})
-                            elif 'anyOf' in schema:
-                                types = [get_type(sub_prop) for sub_prop in schema['anyOf']]
-                                if 'null' in types:
-                                    types.remove('null')
-                                    request_body_params.append({'type': f"Optional[{types[0]}]", 'title': slugify(types[0])})
-                                types = sorted(list(set(types)))
-                                if len(types) == 1:
-                                    request_body_params.append({'type': types[0], 'title': slugify(types[0])})
-                                else:
-                                    type_ = types[0]
-                                    if isinstance(type_, list):
-                                        idx = 0
-                                        type_ = None if isinstance(type_, [list, tuple, dict, set]) else type_
-                                        while type_ == None and idx < len(types):
-                                            type_ = type_[idx]
-                                            type_ = None if isinstance(type_, [list, tuple, dict, set]) else type_
-                                            idx += 1
-                                    type_ = (type_ or 'Any').replace("'", "")
-                                    types = list(set(types))
-                                    request_body_params.append({'type': 'Union[' + ', '.join(types) + ']', 'title': slugify(type_)})
-
-
+                    request_body_params = process_request_body(request_body)
                     definition['request_body'] = request_body_params
 
+            # figure out return type and constructor
             responses = operation.get('responses', {})
-            return_types = []
-            return_ctors = []
-            for status_code, response in responses.items():
-                is_success = status_code.startswith('2')
-                if 'content' in response:
-                    ref = response['content']['application/json']['schema']
-                    if ref.get('type') == 'array':
-                        refs = ref['items']
-                        if '$ref' not in refs:
-                            return_types.append('List[dict]')
-                        else:
-                            reference = refs['$ref'][1:].split('/')[-1]
-                            return_types.append(f'List[models.{reference}]')
-                    else:
-                        if '$ref' not in ref:
-                            return_types.append('dict')
-                        else:
-                            reference = ref['$ref'][1:].split('/')[-1]
-                            return_types.append(f'models.{reference}')
-                if is_success and return_types:
-                    last_return = return_types[-1]
-                    if 'List' in last_return:
-                        return_ctor = re.findall(r'\[(.*?)\]', last_return)[0]
-                    else:
-                        return_ctor = last_return
-                    return_ctors.append(return_ctor)
-
-            return_ctors = list(set(return_ctors))
-            return_types = list(set(return_types))
+            return_types, return_ctors = process_responses(responses)
 
             if len(return_types) == 1:
                 definition['return_type'] = return_types[0]
@@ -278,12 +124,52 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
                         definition['return_ctor'] = return_ctors[0]
                     else:
                         definition['return_ctor'] = new_return_ctors[0]
+            else:
+                # something went wrong
+                definition['return_type'] = 'None'
             
-            if 'return_ctor' in definition and  'List' in definition['return_ctor']:
-                definition['return_ctor'] = re.findall(r'\[(.*?)\]', definition['return_ctor'])[0]
+            if 'return_ctor' in definition:
+                if 'List' in definition['return_ctor']:
+                    definition['return_ctor'] = re.findall(r'\[(.*?)\]', definition['return_ctor'])[0]
             else:
                 definition['return_ctor'] = 'dict'
             methods.append(definition)
+    return methods
+
+
+def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
+    with open(openapi_json_path, 'r') as file:
+        spec = json.load(file)
+
+    # Validate the OpenAPI spec
+    try:
+        validate_spec(spec)
+    except Exception as e:
+        tb = e.__traceback__
+        print(f'\033[91mError validating OpenAPI spec:\n{str(tb)}\033[0m') # ]] to silence IDE warnings
+
+    # create directory if it doesn't exist
+    client_module_name = og_output_dir.split('/')[-1].replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
+    output_dir = os.path.join(og_output_dir, client_module_name)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # create __init__.py file if it doesn't exist
+    with open(os.path.join(output_dir, '__init__.py'), 'w') as file:
+        pass
+
+    # create models directory if it doesn't exist
+    # Generate Pydantic models
+    models = {}
+    # first build enums, then build models
+    schemas = spec.get('components', {}).get('schemas', {})
+    for name, schema in filter(lambda x: 'enum' in x[1], schemas.items()):
+        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
+        models[name] = model_code
+    for name, schema in filter(lambda x: 'enum' not in x[1], schemas.items()):
+        model_code = generate_pydantic_model(schema, 'templates/model_template.j2')
+        models[name] = model_code
+
+    methods = parse_methods(spec)
 
     # Load and render the template
     app_name = spec.get('info', {}).get('title', 'OpenAPI Client').title().replace('Api', 'API').replace(' ', '')
@@ -294,54 +180,30 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
 
     client_module_name = client_module_name.replace('/', '.')
 
-    env = Environment(loader=FileSystemLoader(CURRENT_DIR))
-    template = env.get_template('templates/README_template.j2')
-    readme_content = template.render(
-        project_name=app_name,
-        client_module_name=f'{client_module_name}.client',
-        model_module_name=f'{client_module_name}.models',
-        methods=methods,
-    )
-
-    with open(os.path.join(output_dir, '../README.md'), 'w') as file:
-        file.write(readme_content)
-
-    template = env.get_template('templates/requirements_template.j2')
-    requirements_content = template.render()
-    with open(os.path.join(output_dir, '../requirements.txt'), 'w') as file:
-        file.write(requirements_content)
-    
-    template = env.get_template('templates/pyproject_template.j2')
-    requirements_content = template.render(project_name=client_module_name)
-    with open(os.path.join(output_dir, '../pyproject.toml'), 'w') as file:
-        file.write(requirements_content)
-
-    template_path = 'templates/client_template.j2'
-    output_file = 'client.py'
-
-    template = env.get_template(template_path)
-    client_code = template.render(
-        app_name=app_name,
-        methods=methods,
-        client_module_name=client_module_name.replace('/', '.'),
-        token_type=token_type,
-    )
-    # Write the rendered code to a file
-    with open(os.path.join(output_dir, output_file), 'w') as file:
-        file.write(client_code)
-
-    template = env.get_template('templates/async_client_template.j2')
-    async_client_code = template.render(
-        app_name=app_name,
-        methods=methods,
-        client_module_name=client_module_name.replace('/', '.'),
-        token_type=token_type,
-    )
-    with open(os.path.join(output_dir, 'async_client.py'), 'w') as file:
-        file.write(async_client_code)
-
     if not models:
-        print('\033[91mNo models found in the OpenAPI spec!\033[0m')  # ]] to silence IDE warnings
+        print('\033[91mNo models found in the OpenAPI spec!\033[0m') # ]] to silence IDE warnings
+    if not methods:
+        print('\033[91mNo methods found in the OpenAPI spec!\033[0m') # ]] to silence IDE warnings
+    
+    client_args = {
+        'app_name': app_name,
+        'methods': methods,
+        'client_module_name': client_module_name.replace('/', '.'),
+        'token_type': token_type,
+    }
+    
+    render_template('templates/model_module_template.j2', os.path.join(output_dir, 'models.py'), models=models.values())
+    render_template('templates/client_template.j2', os.path.join(output_dir, 'client.py'), **client_args)
+    render_template('templates/async_client_template.j2', os.path.join(output_dir, 'async_client.py'), **client_args)
+    render_template(
+        'templates/README_template.j2', os.path.join(output_dir, '../README.md'), 
+        project_name=app_name, client_module_name=f'{client_module_name}.client', 
+        model_module_name=f'{client_module_name}.models', methods=methods
+    )
+    render_template('templates/requirements_template.j2', os.path.join(output_dir, '../requirements.txt'))
+    render_template(
+        'templates/pyproject_template.j2', os.path.join(output_dir, '../pyproject.toml'),
+        project_name=client_module_name)
 
     return output_dir
 

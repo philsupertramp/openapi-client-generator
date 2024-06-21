@@ -172,6 +172,7 @@ files = []
 develop = false
 
 [package.dependencies]
+httpx = "^0.27.0"
 pydantic = "^2.7.1"
 requests = "^2.31.0"
 
@@ -869,4 +870,4 @@ zstd = ["zstandard (>=0.18.0)"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.13"
-content-hash = "5469958509f8da5be6f310bbf9b0e4475dff8ff847d206babf39500aad3f0d2c"
+content-hash = "e01548a8281347df0295c4154d0378c3dfc461c27665fa33600a383feb222bc6"
