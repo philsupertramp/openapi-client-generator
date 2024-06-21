@@ -10,7 +10,6 @@ package-mode = false
 python = ">=3.10,<3.13"
 Jinja2 = "^3.1.4"
 openapi-spec-validator = "^0.7.1"
-data-sink-api-client = {path = "data_sink_api_client"}
 
 
 [build-system]
