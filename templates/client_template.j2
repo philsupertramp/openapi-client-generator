@@ -28,12 +28,12 @@ class {{app_name}}Client:
             return [object_ctor(**item) for item in data]
         return object_ctor(**data)
 {% for method in methods %}
-    def {{ method.name }}(self{% for param in method.params %}, {{ param }}{% endfor %}{% for body in method.request_body %}, {{body.title}}: {{body.type}}{% endfor %}){% if 'return_type' in method %} -> {{method.return_type}}{% endif %}:
+    def {{ method.name }}(self{% for param in method.params %}, {{ param }}{% endfor %}{% for param in method.query_params %}, {{param}}{% endfor %}{% for body in method.request_body %}, {{body.title}}: {{body.type}}{% endfor %}){% if 'return_type' in method %} -> {{method.return_type}}{% endif %}:
         """{{ method.description }}"""
         return self._request(
             '{{ method.http_method }}',
             {% if ('query_params' in method and method.query_params|length > 0) or ('params' in method and method.params|length > 0) %}f{% endif %}'{{ method.endpoint }}'{% if method.query_params %},
-            params=dict({{ method.query_params }}){% endif %}{% if 'request_body' in method %}, 
+            params=dict({% for p in method.query_params %}'{{p}}': {{p}}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}{% if 'request_body' in method %},
             json={% for e in method.request_body %}{{e.title}}{% endfor %}{% endif %},
             object_ctor={{ method.return_ctor }}
         )

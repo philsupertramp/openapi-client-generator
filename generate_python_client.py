@@ -93,8 +93,8 @@ def parse_methods(spec):
                 'name': method_name,
                 'http_method': http_method.upper(),
                 'endpoint': endpoint,
-                'params': param_names + query_params,
-                'query_params': ', '.join(f"'{param}': {param}" for param in query_params),
+                'params': param_names,
+                'query_params': query_params,
                 'description': operation.get('summary', ''),
             }
             request_body_params = []
@@ -129,7 +129,8 @@ def parse_methods(spec):
                 definition['return_type'] = 'None'
             
             if 'return_ctor' in definition:
-                if 'List' in definition['return_ctor']:
+                if 'List[' in definition['return_ctor']:
+                    print(definition['return_ctor'])
                     definition['return_ctor'] = re.findall(r'\[(.*?)\]', definition['return_ctor'])[0]
             else:
                 definition['return_ctor'] = 'dict'
@@ -140,6 +141,13 @@ def parse_methods(spec):
 def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     with open(openapi_json_path, 'r') as file:
         spec = json.load(file)
+
+    openapi_version = spec.get('openapi')
+    swagger_version = spec.get('swagger')
+
+    if not openapi_version and not swagger_version:
+        print('\033[91mInvalid OpenAPI spec: unsupported spec!\033[0m') # ]] to silence IDE warnings
+        raise ValueError('Invalid OpenAPI spec: unsupported spec!')
 
     # Validate the OpenAPI spec
     try:

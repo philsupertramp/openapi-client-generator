@@ -38,11 +38,11 @@ _No parameters._{% endif %}
 
 ```python
 {% if method.params %}# Add your parameters here
-{% for param in method.params %}{{ param }} = None{% if not loop.last %},{% endif %}
+{% for param in method.params %}{{ param }} = None
 {% endfor %}{% endif %}{% if method.query_params %}# Add your query parameters here
-{% for param in method.query_params %}{{ param }} = None{% if not loop.last %},{% endif %}
+{% for param in method.query_params %}{{ param }} = None
 {% endfor %}{% endif %}{% if method.request_body %}# Add your request body here
-{% for param in method.request_body %}{{ param.title }} = {{param.type}}(...){% if not loop.last %},{% endif %}
+{% for param in method.request_body %}{{ param.title }} = {{param.type}}(...)
 {% endfor %}{% endif %}
 response = client.{{ method.name }}({% if 'params' in method %}{{ method.params|join(', ') }}{% endif %}{% if 'request_body' in method %}{% for param in method.request_body %}{% if method.params|length > 0 %}, {% endif %}{{param.title}}{%endfor%}{%endif%})
 print(response)
