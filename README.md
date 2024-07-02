@@ -1,5 +1,5 @@
 # OpenAPI Client Generator
-Simple utility to generate a client for an OpenAPI 2.0/3.0 specification (JSON file).
+Simple utility to generate a client for an Swagger 2.0/OpenAPI 3.1 specification (JSON file).
 
 ## Installation
 ```bash
