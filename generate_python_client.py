@@ -13,6 +13,8 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 model_registry = {}
 enum_objects = {}
 
+__version__ = '0.0.2'
+
 
 def generate_pydantic_model(schema, template_path):
     global enum_objects
@@ -138,7 +140,7 @@ def parse_methods(spec):
     return methods
 
 
-def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
+def generate_client(openapi_json_path, og_output_dir, client_module_name, project_name, token_type='Basic', async_=False, username=None, version=None):
     with open(openapi_json_path, 'r') as file:
         spec = json.load(file)
 
@@ -157,7 +159,7 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
         print(f'\033[91mError validating OpenAPI spec:\n{str(tb)}\033[0m') # ]] to silence IDE warnings
 
     # create directory if it doesn't exist
-    client_module_name = og_output_dir.split('/')[-1].replace('-', '_').replace(' ', '_').replace('.', '_').replace('/', '_').replace('\\', '_')
+    client_module_name = slugify(client_module_name)
     output_dir = os.path.join(og_output_dir, client_module_name)
     os.makedirs(output_dir, exist_ok=True)
 
@@ -202,16 +204,16 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
     
     render_template('templates/model_module_template.j2', os.path.join(output_dir, 'models.py'), models=models.values())
     render_template('templates/client_template.j2', os.path.join(output_dir, 'client.py'), **client_args)
-    render_template('templates/async_client_template.j2', os.path.join(output_dir, 'async_client.py'), **client_args)
+    if async_: render_template('templates/async_client_template.j2', os.path.join(output_dir, 'async_client.py'), **client_args)
     render_template(
         'templates/README_template.j2', os.path.join(output_dir, '../README.md'), 
-        project_name=app_name, client_module_name=f'{client_module_name}.client', 
+        app_name=app_name, project_name=project_name, client_module_name=f'{client_module_name}.client', 
         model_module_name=f'{client_module_name}.models', methods=methods
     )
-    render_template('templates/requirements_template.j2', os.path.join(output_dir, '../requirements.txt'))
     render_template(
         'templates/pyproject_template.j2', os.path.join(output_dir, '../pyproject.toml'),
-        project_name=client_module_name)
+        project_name=project_name, client_module_name=client_module_name, version=version, username=username
+    )
 
     return output_dir
 
@@ -219,15 +221,46 @@ def generate_client(openapi_json_path, og_output_dir, token_type='Basic'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate a Python client from an OpenAPI spec')
+    parser.add_argument('command', type=str, help='Command to run')
     parser.add_argument('openapi_json_file', type=str, help='Path to the OpenAPI JSON file')
     parser.add_argument('output_dir', type=str, help='Path to the output directory')
+    parser.add_argument('--client-module-name', type=str, default='client', help='Name of the client module')
     parser.add_argument('--token-type', type=str, default='Basic', help='Type of token to use for authentication')
+    parser.add_argument('--async', dest='async_', action='store_true', help='Generate an async client (default: False)')
+
+    parser.add_argument('--upload', action='store_true', help='Upload the generated client to PyPI (default: False)')
+    parser.add_argument('--username', type=str, help='PyPI username')
+    parser.add_argument('--version', type=str, help='Version of the package to upload')
+    parser.add_argument('--project_name', type=str, default='client_library', help='Name of the project')
 
     args = parser.parse_args()
 
-    client_file = generate_client(
-        args.openapi_json_file,
-        args.output_dir,
-        args.token_type,
-    )
-    print(f'\033[92mGenerated Python client: {client_file}\033[0m') # ]] to silence IDE warnings
+    if args.command == 'help':
+        parser.print_help()
+        exit()
+
+    if args.command == 'version':
+        print(__version__)
+        exit()
+
+    if args.command not in ['generate']:
+        print('\033[91mInvalid command!\033[0m') # ]] to silence IDE warnings
+
+    if args.command == 'generate':
+        client_file = generate_client(
+            args.openapi_json_file,
+            args.output_dir,
+            args.client_module_name,
+            args.project_name,
+            args.token_type,
+            args.async_,
+            args.username,
+            args.version,
+        )
+        print(f'\033[92mGenerated Python client: {client_file}\033[0m') # ]] to silence IDE warnings
+
+    if args.upload:
+        if not args.username or not args.version:
+            print('\033[91mPlease provide a username and version to upload the package!\033[0m') # ]] to silence IDE warnings
+            exit()
+        print('\033[92mUploading package to PyPI...\033[0m') # ]] to silence IDE warnings
