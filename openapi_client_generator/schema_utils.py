@@ -55,6 +55,7 @@ def parse_properties(properties, required):
     if base_class == 'Enum':
         enums = properties.pop('enums')
         enum_type = properties.pop('enum_type', 'str')
+        base_class = f'{enum_type}, Enum'
         parsed_properties = {enum.upper(): {'title': enum, 'default': f"'{enum}'", 'type': enum_type} for enum in enums}
         return parsed_properties, base_class
 

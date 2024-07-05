@@ -47,7 +47,7 @@ def render_template(template_name, output_file, **kwargs):
 
 def process_responses(responses):
     return_types = []
-    return_ctors = []
+    return_ctors = {}
     for status_code, response in responses.items():
         is_success = status_code.startswith('2')
         if 'content' in response:
@@ -65,15 +65,18 @@ def process_responses(responses):
                 else:
                     reference = ref['$ref'][1:].split('/')[-1]
                     return_types.append(f'models.{reference}')
-        if is_success and return_types:
+        if return_types:
             last_return = return_types[-1]
             if '[' in last_return or ']' in last_return:
                 return_ctor = re.findall(r'\[(.*?)\]', last_return)[0]
             else:
                 return_ctor = last_return
-            return_ctors.append(return_ctor)
+            if status_code not in return_ctors:
+                return_ctors[status_code] = [return_ctor]
+            else:
+                return_ctors[status_code].append(return_ctor)
 
-    return list(set(return_types)), list(set(return_ctors))
+    return list(set(return_types)), return_ctors
 
 
 def parse_methods(spec):
@@ -113,29 +116,21 @@ def parse_methods(spec):
 
             if len(return_types) == 1:
                 definition['return_type'] = return_types[0]
-                definition['return_ctor'] = return_ctors[0]
+                definition['return_ctor'] = return_ctors
 
             elif len(return_types) > 1:
                 return_types = list(set(return_types))
                 definition['return_type'] = 'Union[' + ', '.join(return_types) + ']'
-                if len(return_ctors) == 1:
-                    definition['return_ctor'] = return_ctors[0]
-                else:
-                    new_return_ctors = [c for c in return_ctors if c not in ['dict', 'list', 'Any']]
-                    if len(new_return_ctors) < 1:
-                        definition['return_ctor'] = return_ctors[0]
-                    else:
-                        definition['return_ctor'] = new_return_ctors[0]
+                definition['return_ctor'] = return_ctors
             else:
                 # something went wrong
                 definition['return_type'] = 'None'
             
-            if 'return_ctor' in definition:
-                if 'List[' in definition['return_ctor']:
-                    print(definition['return_ctor'])
-                    definition['return_ctor'] = re.findall(r'\[(.*?)\]', definition['return_ctor'])[0]
-            else:
+            if 'return_ctor' not in definition:
                 definition['return_ctor'] = 'dict'
+
+            if 'return_ctor' in definition:
+                definition['return_ctor'] = '{\n' + ' ' * 16 + (',\n' + ' ' * 16).join([f'{status_code}: {response[0]}' for status_code, response in definition['return_ctor'].items()]) + '\n' + ' ' * 12 + '}'
             methods.append(definition)
     return methods
 

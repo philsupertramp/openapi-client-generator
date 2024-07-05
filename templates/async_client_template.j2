@@ -1,7 +1,7 @@
 import httpx
 from urllib.parse import urljoin
 from pydantic import BaseModel
-from {{client_module_name}} import models
+from . import models
 from typing import List, Dict, Any, Optional, Union
 
 
@@ -14,7 +14,7 @@ class Async{{app_name}}Client:
             'Content-Type': 'application/json'
         })
 
-    async def _request(self, method, endpoint, object_ctor, json=None, **kwargs):
+    async def _request(self, method, endpoint, object_ctors, json=None, **kwargs):
         url = urljoin(self.base_url, endpoint)
         if json is not None:
             if type(json.__class__) == type(BaseModel):
@@ -23,6 +23,8 @@ class Async{{app_name}}Client:
 
         async with self.session:
             response = await self.session.request(method, url, **kwargs)
+
+        object_ctor = object_ctors.get(response.status_code, dict)
         response.raise_for_status()
         data = response.json()
         if isinstance(data, list):
@@ -36,6 +38,6 @@ class Async{{app_name}}Client:
             {% if ('query_params' in method and method.query_params|length > 0) or ('params' in method and method.params|length > 0) %}f{% endif %}'{{ method.endpoint }}'{% if method.query_params %},
             params=dict({% for p in method.query_params %}{{p}}={{p}}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}{% if 'request_body' in method %},
             json={% for e in method.request_body %}{{e.title}}{% endfor %}{% endif %},
-            object_ctor={{ method.return_ctor }}
+            object_ctors={{ method.return_ctor }}
         )
 {% endfor %}
