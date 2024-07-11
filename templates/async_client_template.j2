@@ -14,12 +14,14 @@ class Async{{app_name}}Client:
             'Content-Type': 'application/json'
         })
 
-    async def _request(self, method, endpoint, object_ctors, json=None, **kwargs):
+    async def _request(self, method, endpoint, object_ctors, json_data=None, **kwargs):
         url = urljoin(self.base_url, endpoint)
-        if json is not None:
-            if type(json.__class__) == type(BaseModel):
-                json = json.model_dump()
-            kwargs['json'] = json
+        if json_data is not None:
+            if type(json_data.__class__) == type(BaseModel):
+                json_data = json_data.model_dump()
+            elif isinstance(json, list):
+                json_data = [item.model_dump() for item in json_data]
+            kwargs['json'] = json_data
 
         async with self.session:
             response = await self.session.request(method, url, **kwargs)
