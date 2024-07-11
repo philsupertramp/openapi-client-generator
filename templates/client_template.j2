@@ -38,7 +38,7 @@ class {{app_name}}Client:
             '{{ method.http_method }}',
             {% if ('query_params' in method and method.query_params|length > 0) or ('params' in method and method.params|length > 0) %}f{% endif %}'{{ method.endpoint }}'{% if method.query_params %},
             params=dict({% for p in method.query_params %}{{p}}={{p}}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}{% if 'request_body' in method %},
-            json={% for e in method.request_body %}{{e.title}}{% endfor %}{% endif %},
+            json_data={% for e in method.request_body %}{{e.title}}{% endfor %}{% endif %},
             object_ctors={{ method.return_ctor }}
         )
 {% endfor %}
