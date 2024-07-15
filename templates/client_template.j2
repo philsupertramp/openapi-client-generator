@@ -6,10 +6,11 @@ from typing import List, Dict, Any, Optional, Union
 
 
 class {{app_name}}Client:
-    def __init__(self, base_url, credentials):
+    def __init__(self, base_url, credentials, timeout=15):
         self.base_url = base_url
         self.credentials = credentials
         self.session = requests.Session()
+        self.session.timeout = timeout
         self.session.headers.update({
             'Authorization': f'{{token_type}} {self.credentials}',
             'Content-Type': 'application/json'

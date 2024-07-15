@@ -6,13 +6,13 @@ from typing import List, Dict, Any, Optional, Union
 
 
 class Async{{app_name}}Client:
-    def __init__(self, base_url, credentials):
+    def __init__(self, base_url, credentials, timeout=15):
         self.base_url = base_url
         self.credentials = credentials
         self.session = httpx.AsyncClient(headers={
             'Authorization': f'{{token_type}} {self.credentials}',
             'Content-Type': 'application/json'
-        })
+        }, timeout=timeout)
 
     async def _request(self, method, endpoint, object_ctors, json_data=None, **kwargs):
         url = urljoin(self.base_url, endpoint)
