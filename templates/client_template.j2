@@ -33,7 +33,7 @@ class {{app_name}}Client:
             return [object_ctor(**item) for item in data]
         return object_ctor(**data)
 {% for method in methods %}
-    def {{ method.name }}(self{% for param in method.params %}, {{ param }}{% endfor %}{% for param in method.query_params %}, {{param}}{% endfor %}{% for body in method.request_body %}, {{body.title}}: {{body.type}}{% endfor %}){% if 'return_type' in method %} -> {{method.return_type}}{% endif %}:
+    def {{ method.name }}(self{% for param in method.params %}, {{ param }}{% endfor %}{% for param in method.query_params %}, {{param}}=None{% endfor %}{% for body in method.request_body %}, {{body.title}}: {{body.type}}{% endfor %}){% if 'return_type' in method %} -> {{method.return_type}}{% endif %}:
         """{{ method.description }}"""
         return self._request(
             '{{ method.http_method }}',
