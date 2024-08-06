@@ -30,6 +30,8 @@ class Async{{app_name}}Client:
 
         object_ctor = object_ctors.get(response.status_code, dict)
         response.raise_for_status()
+        if response.status_code == 204:
+            return None
         data = response.json()
         if isinstance(data, list):
             return [object_ctor(**item) for item in data]
