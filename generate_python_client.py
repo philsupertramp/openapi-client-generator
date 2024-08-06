@@ -90,7 +90,11 @@ def parse_methods(spec):
             method_name = operation.get('operationId') or f"{http_method}_{path.replace('/', '_').replace('{', '').replace('}', '')}"
             params = operation.get('parameters', [])
             param_names = [param['name'] for param in params if param['in'] == 'path']
-            query_params = [param['name'] for param in params if param['in'] == 'query']
+            query_params = [
+                {'name': param['name'], 'required': param['required'], 'default': param.get('schema', {}).get('default', None)}
+                for param in params
+                if param['in'] == 'query'
+            ]
             endpoint = path
             for param in param_names:
                 endpoint = endpoint.replace(param, f"{param}")
