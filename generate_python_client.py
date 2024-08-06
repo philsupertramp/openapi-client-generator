@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import json
 import os
 import re
@@ -105,9 +106,11 @@ def parse_methods(spec):
             request_body_params = []
             requires_body = http_method in ['post', 'put', 'patch']
             if requires_body:
-                request_body = operation.get('requestBody', {}).get('content', {})
-                if request_body:
-                    request_body_params = process_request_body(request_body)
+
+                request_body = operation.get('requestBody', {})
+                body_content = request_body.get('content', {})
+                if body_content:
+                    request_body_params = process_request_body(body_content, body_content.get('required', False))
                     definition['request_body'] = request_body_params
 
             # figure out return type and constructor

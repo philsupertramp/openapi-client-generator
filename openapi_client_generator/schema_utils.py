@@ -129,16 +129,23 @@ def get_first_non_container_type(types):
     type_ = (type_ or 'Any').replace("'", "")
     return {'type': type_, 'title': slugify(type_)}
 
-def process_request_body(request_body):
+
+def process_request_body(request_body, is_required=False):
     request_body_params = []
     for content_type, content in request_body.items():
         if content_type != 'application/json':
             continue
         schema = get_content_schema(content)
+        elem = {'required': is_required}
         if '$ref' in schema:
-            request_body_params.append(get_ref_schema(schema))
+            request_body_params.append({**elem, **get_ref_schema(schema)})
+        elif 'items' in schema:
+            if 'anyOf' in schema['items']:
+                ref_schema = get_anyOf_schema(schema['items'])
+            else:
+                ref_schema = get_ref_schema(schema['items'])
+            ref_schema['type'] = f'list[{ref_schema["type"]}]'
+            request_body_params.append({**elem, **ref_schema})
         elif 'anyOf' in schema:
-            request_body_params.append(get_anyOf_schema(schema))
+            request_body_params.append({**elem, **get_anyOf_schema(schema)})
     return request_body_params
-
-
