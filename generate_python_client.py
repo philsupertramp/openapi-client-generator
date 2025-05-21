@@ -22,20 +22,20 @@ def generate_pydantic_model(schema, template_path):
     model_name = schema.get('title', 'MyModel')
     properties = schema.get('properties', {})
     required = schema.get('required', [])
-    
+
     if not properties and 'enum' in schema:
         properties, enum_object = parse_enum_schema(schema)
         key = list(enum_object.keys())[0]
         enum_objects[key] = enum_object[key]
     else:
         properties = parse_properties_schema(properties, enum_objects)
-    
+
     parsed_properties, base_class = parse_properties(properties, required)
 
     env = Environment(loader=FileSystemLoader(CURRENT_DIR))
     template = env.get_template(template_path)
     model_code = template.render(model_name=model_name, properties=parsed_properties, base_class=base_class)
-    
+
     return model_code
 
 

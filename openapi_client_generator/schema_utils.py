@@ -64,7 +64,7 @@ def parse_properties(properties, required):
         default = prop.get('default', None)
         if type_ == 'str' and prop.get('format') == 'date-time':
             type_ = 'datetime'
-        if type_ == 'str':
+        if type_ == 'str' or (not type_.islower() and not '[' in type_ and not ']' in type_):
             default = f"'{default}'"
         parsed_properties[name] = {
             'type': type_,
